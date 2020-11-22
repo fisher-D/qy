@@ -1,0 +1,156 @@
+package main
+
+import (
+	"regexp"
+	"strings"
+
+	"github.com/astaxie/beego/httplib"
+)
+
+type MovieHTML struct {
+	URL     string
+	Content string
+}
+
+func GetMovieHTML(url string) MovieHTML {
+	res := httplib.Get(url)
+	str, err := res.String()
+	if err != nil {
+		panic(err)
+	}
+	if str == "" {
+		panic("The Website is Empty")
+	}
+	Result := MovieHTML{}
+	Result.URL = url
+	Result.Content = str
+	return Result
+}
+
+func (m *MovieHTML) GetUrls() []string {
+	//<a href="https://movie.douban.com/subject/3578981/?from=subject-page" >
+	urls := regexp.MustCompile(`<a.*?href="(https://movie.douban.com/.*?from=subject-page)"`)
+	result := urls.FindAllStringSubmatch(m.Content, -1)
+	//fmt.Println(result)
+	var movielist []string
+	for _, v := range result {
+		movielist = append(movielist, v[1])
+	}
+	return movielist
+	//return result[0]
+}
+
+func (m *MovieHTML) GetOnTime() string {
+	// <span class="pl">上映日期:</span>
+	//<span property="v:initialReleaseDate" content="2019-12-20(中国大陆)">2019-12-20(中国大陆)</span><br/>
+	first := regexp.MustCompile(`<span property="v:initialReleaseDate".*?>(.*)</span><br/>`)
+	result := first.FindAllStringSubmatch(m.Content, -1)
+	return result[0][1]
+}
+
+func (m *MovieHTML) GetMovieRegion() string {
+	//<span class="pl">制片国家/地区:</span> 中国香港<br/>
+	first := regexp.MustCompile(`<span class="pl">制片国家/地区:</span>(.*)<br/>`)
+	region := first.FindAllStringSubmatch(m.Content, -1)
+	//fmt.Println(region)
+	return region[0][1]
+
+}
+
+func (m *MovieHTML) GetMovieType() string {
+	//<span class="pl">类型:</span>
+	//<span property="v:genre">剧情</span> /
+	//<span property="v:genre">动作</span>
+	//<br/>
+	movietype := regexp.MustCompile(`<span class="pl">类型:</span>(.*)<br/>`)
+	first := movietype.FindAllStringSubmatch(m.Content, -1)
+	second := strings.Split(first[0][1], " / ")
+	final := regexp.MustCompile(`<span property="v:genre">(.*)</span>`)
+	var movietypes = ""
+	for _, v := range second {
+		result := final.FindAllStringSubmatch(v, -1)
+		movietypes += result[0][1] + "||"
+	}
+	return movietypes
+}
+
+func (m *MovieHTML) GetWriter() string {
+	//<span ><span class='pl'>编剧</span>: <span class='attrs'>
+	//<a href="/celebrity/1316682/">黄子桓</a> /
+	//<a href="/celebrity/1425972/">深泽寛</a> /
+	//<a href="/celebrity/1336976/">陈大利</a> /
+	//<a href="/celebrity/1336699/">梁礼彦</a>
+	//</span></span><br/>
+	//(.*)<条件>会追踪最靠近目标处的条件
+	writer := regexp.MustCompile(`<span ><span class='pl'>编剧</span>: <span class='attrs'>(.*)</span></span><br/>`)
+	first := writer.FindAllStringSubmatch(m.Content, -1)
+	second := strings.Split(first[0][1], " / ")
+	writers := regexp.MustCompile("<a.*?>(.*)</a>")
+	var Allwriters = ""
+	for _, v := range second {
+		final := writers.FindAllStringSubmatch(v, -1)
+		Allwriters += final[0][1] + "||"
+		//fmt.Println(final)
+	}
+	return Allwriters
+}
+
+func (m *MovieHTML) GetID() string {
+	res := strings.Split(m.URL, "subject/")
+	//fmt.Println(res)
+	final := strings.Split(res[1], "/")
+	return final[0]
+}
+
+func (m *MovieHTML) GetMovieDirector() string {
+	//<a href="/celebrity/1274472/" rel="v:directedBy">叶伟信</a>
+	//正则里，html里的标签不动，即<a开头，以<a/>结尾；
+	//href="/celebrity/1274472/" 使用.*?表示从a开始到rel结束
+	//匹配尽可能少的字符，个人理解为，不关系也不要浪费时空，非贪婪匹配
+	//（.*）表达式 .* 单个字符匹配任意次，即贪婪匹配
+	director := regexp.MustCompile(`<a.*?rel="v:directedBy">(.*)</a>`)
+	result := director.FindAllStringSubmatch(m.Content, -1)
+	return result[0][1]
+	//return ""
+}
+
+func (m *MovieHTML) GetMovieDuration() string {
+	//<span property="v:runtime" content="107">107分钟</span>
+	duration := regexp.MustCompile(`<span property="v:runtime".*?">(.*)</span>`)
+	result := duration.FindAllStringSubmatch(m.Content, -1)
+	return result[0][1]
+}
+
+func (m *MovieHTML) GetMovieRating() string {
+	//<strong class="ll rating_num" property="v:average">7.1</strong>
+	duration := regexp.MustCompile(`<strong.*?property="v:average">(.*)</strong>`)
+	result := duration.FindAllStringSubmatch(m.Content, -1)
+	return result[0][1]
+}
+
+func (m *MovieHTML) GetMovieLanguage() string {
+	//<span class="pl">类型:</span> <span property="v:genre">剧情</span> / <span property="v:genre">动作</span><br/>
+	duration := regexp.MustCompile(` <span class="pl">语言:</span> (.*)<br/>`)
+	result := duration.FindAllStringSubmatch(m.Content, -1)
+	return result[0][1]
+}
+
+func (m *MovieHTML) GetMovieName() string {
+	//<span property="v:itemreviewed">叶问4：完结篇 葉問4</span>
+	duration := regexp.MustCompile(`<span property="v:itemreviewed">(.*)</span>`)
+	result := duration.FindAllStringSubmatch(m.Content, -1)
+	return result[0][1]
+}
+
+func (m *MovieHTML) GetActors() string {
+	prepare := regexp.MustCompile(`<span class='pl'>主演</span>: <span class='attrs'>(.*)</span></span><br/>`)
+	result := prepare.FindAllStringSubmatch(m.Content, -1)
+	final := strings.Split(result[0][1], " /")
+	starring := regexp.MustCompile(`<a.*?rel="v:starring">(.*)</a>`)
+	mainCharacters := ""
+	for _, v := range final {
+		result := starring.FindAllStringSubmatch(v, -1)
+		mainCharacters += result[0][1] + "||"
+	}
+	return mainCharacters
+}
